@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Freenove ESP32 JPG Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        #dropZone.dragover { border-color: #4f46e5; background-color: #f5f3ff; }
+        #loading { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 50; flex-direction: column; align-items: center; justify-content: center; color: white; }
+
+        #canvas { 
+            max-width: 100%; 
+            height: auto;
+            background: #1a1a1a;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 p-4 md:p-8 font-sans text-slate-800">
+
+    <div id="loading">
+        <div class="animate-spin rounded-full h-10 w-10 border-4 border-indigo-500 border-t-transparent mb-4"></div>
+        <p class="font-bold">Processing...</p>
+    </div>
+
+    <div class="max-w-5xl mx-auto bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
+
+        <div class="bg-indigo-600 p-6 text-white flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold flex items-center gap-2"><span>🚀</span>Freenove ESP32 JPG Converter</h1>
+                <p class="text-indigo-100 text-xs mt-1">Auto-scale within 480px | Compatible with TJpg_Decoder</p>
+            </div>
+        </div>
+
+        <div class="p-6 grid grid-cols-1 lg:grid-cols-2 gap-10">
+
+            <div class="space-y-6">
+                <div id="dropZone" class="relative border-4 border-dashed border-slate-200 rounded-2xl p-10 text-center transition-all hover:border-indigo-400">
+                    <input type="file" id="imgInput" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept="image/*">
+                    <div class="space-y-2">
+                        <p class="text-slate-600 font-bold">Drag and drop any image</p>
+                        <p class="text-slate-400 text-xs">Automatically scales to max 480px proportionally</p>
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 p-6 rounded-2xl space-y-4">
+                    <div class="flex justify-between items-center text-sm">
+                        <span class="font-bold text-slate-700">Target Resolution</span>
+                        <span id="scaleNote" class="text-indigo-500 text-[10px] font-mono"></span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-white border rounded-xl p-3">
+                            <label class="block text-[10px] uppercase text-slate-400 font-bold">Width</label>
+                            <input type="number" id="width" class="w-full font-mono font-bold outline-none text-indigo-600">
+                        </div>
+                        <div class="bg-white border rounded-xl p-3">
+                            <label class="block text-[10px] uppercase text-slate-400 font-bold">Height</label>
+                            <input type="number" id="height" class="w-full font-mono font-bold outline-none text-indigo-600">
+                        </div>
+                    </div>
+                    <button id="manualRun" class="w-full bg-slate-800 hover:bg-black text-white font-bold py-3 rounded-xl transition text-sm shadow-lg">
+                        Regenerate with Manual Dimensions
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-slate-900 rounded-2xl p-6 flex flex-col items-center justify-center min-h-[360px]">
+                <canvas id="canvas"></canvas>
+                <div id="info" class="mt-6 text-indigo-300 font-mono text-xs bg-indigo-500/10 px-4 py-2 rounded-full border border-indigo-500/20">
+                    Waiting for upload...
+                </div>
+            </div>
+        </div>
+
+        <div class="p-6 border-t border-slate-100">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-slate-700 flex items-center gap-2">
+                    <span class="w-2 h-2 bg-green-500 rounded-full"></span> C Array Output
+                </h3>
+                <button onclick="copyCode()" id="copyBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-2 rounded-full font-bold text-sm transition shadow-md active:scale-95">
+                    Copy Code
+                </button>
+            </div>
+            <textarea id="output" readonly placeholder="C code will appear here..." 
+                class="w-full h-72 p-6 bg-slate-800 text-indigo-200 font-mono text-[10px] rounded-2xl border-none shadow-inner resize-none focus:outline-none scrollbar-thin"></textarea>
+        </div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const imgInput = document.getElementById('imgInput');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const output = document.getElementById('output');
+        const info = document.getElementById('info');
+        const loading = document.getElementById('loading');
+        let currentImg = null;
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(e => window.addEventListener(e, ev => ev.preventDefault()));
+
+        dropZone.addEventListener('dragover', () => dropZone.classList.add('dragover'));
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', (e) => {
+            dropZone.classList.remove('dragover');
+            handleFile(e.dataTransfer.files[0]);
+        });
+
+        imgInput.onchange = (e) => handleFile(e.target.files[0]);
+        document.getElementById('manualRun').onclick = () => { if(currentImg) generate(currentImg); };
+
+        function handleFile(file) {
+            if (!file || !file.type.match('image.*')) return;
+            loading.style.display = 'flex';
+            
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const img = new Image();
+                img.onload = () => {
+                    currentImg = img;
+                    
+                    let tw = img.width;
+                    let th = img.height;
+                    const LIMIT = 480;
+
+                    if (tw > LIMIT || th > LIMIT) {
+                        const ratio = Math.min(LIMIT / tw, LIMIT / th);
+                        tw = Math.round(tw * ratio);
+                        th = Math.round(th * ratio);
+                        document.getElementById('scaleNote').innerText = `Scaled (Original ${img.width}x${img.height})`;
+                    } else {
+                        document.getElementById('scaleNote').innerText = `Original Ratio`;
+                    }
+
+                    document.getElementById('width').value = tw;
+                    document.getElementById('height').value = th;
+                    
+                    setTimeout(() => generate(img), 100);
+                };
+                img.src = ev.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function generate(img) {
+            const w = parseInt(document.getElementById('width').value) || 240;
+            const h = parseInt(document.getElementById('height').value) || 240;
+            
+            canvas.width = w;
+            canvas.height = h;
+            ctx.drawImage(img, 0, 0, w, h);
+
+            const dataUrl = canvas.toDataURL('image/jpeg', 1.0);
+            const binString = atob(dataUrl.split(',')[1]);
+            const len = binString.length;
+
+            const hexArr = [];
+            hexArr.push(`// TJpg_Decoder Image\n// Res: ${w}x${h} | Size: ${len} Bytes\nconst unsigned char img_asset[] PROGMEM = {\n`);
+
+            let line = "  ";
+            for (let i = 0; i < len; i++) {
+                let hx = binString.charCodeAt(i).toString(16).toUpperCase().padStart(2, '0');
+                line += "0x" + hx;
+                if (i === len - 1) {
+                    hexArr.push(line + "\n");
+                } else {
+                    line += ", ";
+                    if ((i + 1) % 12 === 0) {
+                        hexArr.push(line + "\n");
+                        line = "  ";
+                    }
+                }
+            }
+            hexArr.push("};");
+
+            output.value = hexArr.join("");
+            info.innerText = `READY: ${w}x${h} | ${(len/1024).toFixed(1)} KB`;
+            loading.style.display = 'none';
+        }
+
+        function copyCode() {
+            if(!output.value) return;
+            output.select();
+            document.execCommand('copy');
+            const btn = document.getElementById('copyBtn');
+            const original = btn.innerText;
+            btn.innerText = "COPIED!";
+            btn.classList.replace('bg-indigo-600', 'bg-green-600');
+            setTimeout(() => {
+                btn.innerText = original;
+                btn.classList.replace('bg-green-600', 'bg-indigo-600');
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
