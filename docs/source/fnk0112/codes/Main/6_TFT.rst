@@ -192,6 +192,9 @@ Connect Freenove ESP32 Mini TV to the computer with USB cable.
 Sketch
 ==========================
 
+Install Libraries
+----------------------------
+
 Click **Sketch** -> **Include Library** -> **Add .ZIP Library...**
 
 .. image:: ../_static/imgs/6_TFT/Chapter06_05.png
@@ -353,6 +356,19 @@ Connect Freenove ESP32 Mini TV to the computer with USB cable.
 
 Sketch
 ==================================
+
+Install Libraries
+--------------------------------------
+
+Click **Sketch** -> **Include Library** -> **Add .ZIP Library...**
+
+.. image:: ../_static/imgs/6_TFT/Chapter06_05.png
+    :align: center
+
+Install Time_v1.6.1.zip
+
+.. image:: ../_static/imgs/6_TFT/Chapter06_21.png
+    :align: center
 
 Open “Sketch_06.3_TFT_Clock” folder under **“Freenove_ESP32_Mini_TV\\Sketch”** and double-click **“Sketch_06.3_TFT_Clock.ino”**.
 
