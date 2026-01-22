@@ -35,3 +35,4 @@ This product provides the following online documents.
 
    fnk0112/codes/Main.rst
    fnk0112/codes/Miner.rst
+   fnk0112/codes/Board_Test.rst
