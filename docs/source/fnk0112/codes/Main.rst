@@ -40,3 +40,4 @@ Main Tutorial
    Main/9_Lvgl_Picture.rst
    Main/10_Lvgl_Timer.rst
    Main/11_LVGL_Game.rst
+   Main/12_LVGL_Weather_Clock.rst

@@ -33,7 +33,7 @@ This tutorial take FNK0104 (https://github.com/Freenove/Freenove_ESP32_S3_Displa
 
 .. image:: _static/imgs/Board_Test/Board01.png
     :align: center
-   
+
 3. Select the device model.
 
 :combo:`red font-bolder:Please note: The online programming feature is only supported on certain models. Please refer to the real-time list of devices displayed on the webpage. If your device is not listed, this feature is not supported for it at this time.`
