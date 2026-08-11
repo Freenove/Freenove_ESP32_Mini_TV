@@ -94,3 +94,8 @@ The Freenove Weather Clock features three built-in clock faces and two themes (b
     :align: center
 
 :combo:`red font-bolder:Tap the touch button to switch between clock faces. Press and hold the touch button for 3 seconds to switch between themes.`
+
+:combo:`red font-bolder:Press and hold the touch button for 6 seconds to bring up a prompt interface. Continue holding for another 10 seconds to clear the network configuration and re-enter pairing mode.`
+
+.. image:: ../_static/imgs/12_LVGL_Weather_Clock/Chapter12_08.png
+    :align: center
