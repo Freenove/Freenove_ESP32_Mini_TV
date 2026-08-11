@@ -93,6 +93,7 @@ static const ThemePalette *pal(void) {
 
 /* Boot-page widgets */
 static lv_obj_t *scr = nullptr;
+static lv_obj_t *boot_bg = nullptr;
 static lv_obj_t *boot_title = nullptr;
 static lv_obj_t *boot_subtitle = nullptr;
 static lv_obj_t *boot_label = nullptr;
@@ -101,6 +102,15 @@ static lv_obj_t *boot_bar = nullptr;
 static lv_obj_t *boot_step_dots[BOOT_PAGE_COUNT] = {nullptr};
 static BootPage s_boot_page = BOOT_PAGE_START;
 static bool s_boot_visible = false;
+
+/* Long-press WiFi reconfig warning overlay */
+static lv_obj_t *reconfig_panel = nullptr;
+static lv_obj_t *reconfig_countdown = nullptr;
+static lv_obj_t *reconfig_label = nullptr;
+
+static void set_weather_face_visible(bool visible);
+static void apply_face_visibility(void);
+static void hide_or_show(lv_obj_t *o, bool visible);
 
 /* Main UI widgets */
 static lv_obj_t *city_label = nullptr;
@@ -333,6 +343,18 @@ static void ensure_boot_widgets(void) {
     scr = lv_screen_active();
     style_screen(scr);
 
+    /* Full-screen backdrop so boot covers the main clock UI. */
+    boot_bg = lv_obj_create(scr);
+    lv_obj_set_size(boot_bg, 240, 240);
+    lv_obj_set_pos(boot_bg, 0, 0);
+    lv_obj_set_style_bg_color(boot_bg, lv_color_hex(pal()->bg), 0);
+    lv_obj_set_style_bg_opa(boot_bg, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(boot_bg, 0, 0);
+    lv_obj_set_style_radius(boot_bg, 0, 0);
+    lv_obj_set_style_pad_all(boot_bg, 0, 0);
+    lv_obj_clear_flag(boot_bg, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(boot_bg, LV_OBJ_FLAG_HIDDEN);
+
     /* Step indicator dots. */
     const int dot_n = (int)BOOT_PAGE_COUNT;
     const int dot_sz = 8;
@@ -387,6 +409,22 @@ static void ensure_boot_widgets(void) {
     lv_obj_align(boot_hint, LV_ALIGN_BOTTOM_MID, 0, -28);
 }
 
+static void boot_raise_chrome(void) {
+    if (boot_bg) {
+        lv_obj_move_foreground(boot_bg);
+    }
+    for (int i = 0; i < (int)BOOT_PAGE_COUNT; ++i) {
+        if (boot_step_dots[i]) {
+            lv_obj_move_foreground(boot_step_dots[i]);
+        }
+    }
+    if (boot_title) lv_obj_move_foreground(boot_title);
+    if (boot_subtitle) lv_obj_move_foreground(boot_subtitle);
+    if (boot_bar) lv_obj_move_foreground(boot_bar);
+    if (boot_label) lv_obj_move_foreground(boot_label);
+    if (boot_hint) lv_obj_move_foreground(boot_hint);
+}
+
 static void hide_or_show(lv_obj_t *o, bool visible) {
     if (!o) return;
     if (visible) {
@@ -398,6 +436,7 @@ static void hide_or_show(lv_obj_t *o, bool visible) {
 
 static void set_boot_visible(bool visible) {
     s_boot_visible = visible;
+    hide_or_show(boot_bg, visible);
     hide_or_show(boot_title, visible);
     hide_or_show(boot_subtitle, visible);
     hide_or_show(boot_label, visible);
@@ -405,6 +444,15 @@ static void set_boot_visible(bool visible) {
     hide_or_show(boot_bar, visible);
     for (int i = 0; i < (int)BOOT_PAGE_COUNT; ++i) {
         hide_or_show(boot_step_dots[i], visible);
+    }
+    if (visible) {
+        /* Cover any main-clock widgets while portal / boot is up. */
+        set_weather_face_visible(false);
+        hide_or_show(analog_root, false);
+        hide_or_show(xl_root, false);
+        boot_raise_chrome();
+    } else if (city_label != nullptr || analog_root != nullptr || xl_root != nullptr) {
+        apply_face_visibility();
     }
 }
 
@@ -698,6 +746,10 @@ static void refresh_boot_theme_colors(void) {
     const ThemePalette *p = pal();
 
     style_screen(scr);
+    if (boot_bg) {
+        lv_obj_set_style_bg_color(boot_bg, lv_color_hex(p->bg), 0);
+        lv_obj_set_style_bg_opa(boot_bg, LV_OPA_COVER, 0);
+    }
     lv_obj_set_style_text_color(boot_title, lv_color_hex(p->hour), 0);
     lv_obj_set_style_text_color(boot_subtitle, lv_color_hex(p->min), 0);
     lv_obj_set_style_text_color(boot_label, lv_color_hex(p->text), 0);
@@ -778,6 +830,40 @@ static void refresh_main_theme_colors(void) {
     }
 }
 
+static void ensure_reconfig_hint_widgets(void) {
+    if (reconfig_panel != nullptr) {
+        return;
+    }
+    if (scr == nullptr) {
+        scr = lv_screen_active();
+    }
+    pick_fonts();
+
+    reconfig_panel = lv_obj_create(scr);
+    lv_obj_set_size(reconfig_panel, 240, 240);
+    lv_obj_set_style_bg_color(reconfig_panel, lv_color_hex(0xFF0000), 0);
+    lv_obj_set_style_bg_opa(reconfig_panel, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(reconfig_panel, 0, 0);
+    lv_obj_set_style_radius(reconfig_panel, 0, 0);
+    lv_obj_set_style_pad_all(reconfig_panel, 0, 0);
+    lv_obj_clear_flag(reconfig_panel, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(reconfig_panel, LV_OBJ_FLAG_HIDDEN);
+
+    const lv_font_t *countdown_font = font_clock_lg ? font_clock_lg : font_xl;
+    reconfig_countdown = make_label(reconfig_panel, countdown_font, 0xFFFFFF);
+    lv_obj_set_style_text_align(reconfig_countdown, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_text(reconfig_countdown, "10");
+    lv_obj_align(reconfig_countdown, LV_ALIGN_TOP_MID, 0, 36);
+
+    reconfig_label = make_label(reconfig_panel, font_md, 0xFFFFFF);
+    lv_obj_set_style_text_align(reconfig_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_width(reconfig_label, 200);
+    lv_label_set_long_mode(reconfig_label, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(reconfig_label,
+                      "Warning!\nHold to reset WiFi setup!\n\nRelease to cancel");
+    lv_obj_align(reconfig_label, LV_ALIGN_CENTER, 0, 28);
+}
+
 static void apply_theme_now(void) {
     if (scr == nullptr) {
         scr = lv_screen_active();
@@ -787,6 +873,60 @@ static void apply_theme_now(void) {
     refresh_main_theme_colors();
     refresh_analog_theme_colors();
     refresh_xl_theme_colors();
+    lv_timer_handler();
+}
+
+void ui_clock_show_reconfig_hint(bool show) {
+    ensure_reconfig_hint_widgets();
+    if (show) {
+        lv_obj_set_style_bg_color(reconfig_panel, lv_color_hex(0xFF0000), 0);
+        lv_obj_set_style_bg_opa(reconfig_panel, LV_OPA_COVER, 0);
+        lv_obj_set_style_text_color(reconfig_countdown, lv_color_hex(0xFFFFFF), 0);
+        lv_obj_set_style_text_color(reconfig_label, lv_color_hex(0xFFFFFF), 0);
+        lv_obj_clear_flag(reconfig_countdown, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(reconfig_label, LV_OBJ_FLAG_HIDDEN);
+        lv_label_set_text(reconfig_label,
+                          "Warning!\nHold to reset WiFi setup!\n\nRelease to cancel");
+        lv_obj_align(reconfig_label, LV_ALIGN_CENTER, 0, 28);
+        lv_obj_align(reconfig_countdown, LV_ALIGN_TOP_MID, 0, 36);
+        lv_obj_clear_flag(reconfig_panel, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_move_foreground(reconfig_panel);
+    } else {
+        lv_obj_add_flag(reconfig_panel, LV_OBJ_FLAG_HIDDEN);
+    }
+    lv_timer_handler();
+}
+
+void ui_clock_set_reconfig_countdown(int seconds) {
+    ensure_reconfig_hint_widgets();
+    if (seconds < 0) {
+        seconds = 0;
+    }
+    if (seconds > 10) {
+        seconds = 10;
+    }
+    char buf[8];
+    snprintf(buf, sizeof(buf), "%d", seconds);
+    lv_label_set_text(reconfig_countdown, buf);
+    lv_obj_align(reconfig_countdown, LV_ALIGN_TOP_MID, 0, 36);
+}
+
+void ui_clock_show_blackout(const char *text) {
+    ensure_reconfig_hint_widgets();
+    lv_obj_set_style_bg_color(reconfig_panel, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_bg_opa(reconfig_panel, LV_OPA_COVER, 0);
+    lv_obj_add_flag(reconfig_countdown, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_style_text_color(reconfig_label, lv_color_hex(0xFFFFFF), 0);
+    lv_label_set_text(reconfig_label, text ? text : "");
+    lv_obj_align(reconfig_label, LV_ALIGN_CENTER, 0, 0);
+    if (text && text[0] != '\0') {
+        lv_obj_clear_flag(reconfig_label, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(reconfig_label, LV_OBJ_FLAG_HIDDEN);
+    }
+    lv_obj_clear_flag(reconfig_panel, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(reconfig_panel);
+    lv_timer_handler();
     lv_timer_handler();
 }
 
@@ -834,6 +974,11 @@ void ui_clock_show_boot_page(BootPage page, const char *detail) {
         page = BOOT_PAGE_READY;
     }
 
+    /* Never leave the reconfig/blackout panel covering the classic boot UI. */
+    if (reconfig_panel != nullptr) {
+        lv_obj_add_flag(reconfig_panel, LV_OBJ_FLAG_HIDDEN);
+    }
+
     ensure_boot_widgets();
     s_boot_page = page;
 
@@ -862,11 +1007,15 @@ void ui_clock_show_boot_page(BootPage page, const char *detail) {
 
 void ui_clock_show_boot(const char *text) {
     ensure_boot_widgets();
+    if (reconfig_panel != nullptr) {
+        lv_obj_add_flag(reconfig_panel, LV_OBJ_FLAG_HIDDEN);
+    }
     if (!s_boot_visible) {
         set_boot_visible(true);
     }
     lv_label_set_text(boot_label, text ? text : "");
     lv_obj_align(boot_label, LV_ALIGN_CENTER, 0, 18);
+    boot_raise_chrome();
     lv_timer_handler();
     lv_timer_handler();
 }

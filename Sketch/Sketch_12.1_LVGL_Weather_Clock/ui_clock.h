@@ -32,4 +32,13 @@ uint8_t ui_clock_toggle_face(void);
 void ui_clock_update_time(void);
 void ui_clock_update_weather(const WeatherInfo &w);
 
+/** Overlay while holding for WiFi reconfig (show at 6s, hide on release). */
+void ui_clock_show_reconfig_hint(bool show);
+
+/** Update digital countdown (10..0) on the reconfig warning screen. */
+void ui_clock_set_reconfig_countdown(int seconds);
+
+/** Full-screen black (optional white status text). Used before/during WiFi portal. */
+void ui_clock_show_blackout(const char *text);
+
 #endif

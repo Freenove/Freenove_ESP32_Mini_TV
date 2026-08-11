@@ -18,13 +18,25 @@
 
 /** Hold continuously: switch theme */
 #ifndef TOUCH_THEME_PRESS_MS
-#define TOUCH_THEME_PRESS_MS 1000
+#define TOUCH_THEME_PRESS_MS 3000
+#endif
+
+/** Hold continuously: warn that WiFi reconfig is coming */
+#ifndef TOUCH_RECONFIG_HINT_MS
+#define TOUCH_RECONFIG_HINT_MS 6000
+#endif
+
+/** Hold continuously: clear WiFi and reopen portal (6s hint + 10s countdown). */
+#ifndef TOUCH_RECONFIG_PRESS_MS
+#define TOUCH_RECONFIG_PRESS_MS 16000
 #endif
 
 enum TouchEvent : uint8_t {
     TOUCH_EVENT_NONE = 0,
     TOUCH_EVENT_FACE,
     TOUCH_EVENT_THEME,
+    TOUCH_EVENT_RECONFIG_HINT,
+    TOUCH_EVENT_RECONFIG,
 };
 
 void touch_button_begin(void);
@@ -33,5 +45,8 @@ void touch_button_begin(void);
 TouchEvent touch_button_poll(void);
 
 bool touch_button_is_pressed(void);
+
+/** Current press duration in ms; 0 if not pressed. */
+uint32_t touch_button_held_ms(void);
 
 #endif

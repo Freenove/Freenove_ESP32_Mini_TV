@@ -12,7 +12,7 @@
 #endif
 
 #ifndef WIFI_PORTAL_TIMEOUT_S
-#define WIFI_PORTAL_TIMEOUT_S 180
+#define WIFI_PORTAL_TIMEOUT_S 300
 #endif
 
 #ifndef WIFI_CONNECT_TIMEOUT_S

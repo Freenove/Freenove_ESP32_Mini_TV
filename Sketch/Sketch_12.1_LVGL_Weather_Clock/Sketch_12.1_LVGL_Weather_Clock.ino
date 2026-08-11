@@ -20,6 +20,7 @@
 static uint32_t last_time_ms = 0;
 static uint32_t last_weather_ms = 0;
 static bool ui_ready = false;
+static bool reconfig_hint_visible = false;
 
 static void boot_status_live(const char *text) {
     ui_clock_show_boot(text);
@@ -30,6 +31,14 @@ static void boot_page(BootPage page, const char *detail, uint32_t hold_ms = 450)
     ui_clock_show_boot_page(page, detail);
     uint32_t start = millis();
     while (millis() - start < hold_ms) {
+        lvgl_driver_handler();
+        delay(5);
+    }
+}
+
+static void pump_display(uint32_t ms) {
+    uint32_t start = millis();
+    while (millis() - start < ms) {
         lvgl_driver_handler();
         delay(5);
     }
@@ -71,6 +80,56 @@ static void on_face_long_press(void) {
     DBG_PRINTF("[UI] Face -> %s\n", name);
 }
 
+static int reconfig_remaining_sec(void) {
+    uint32_t held = touch_button_held_ms();
+    if (held < TOUCH_RECONFIG_HINT_MS) {
+        return 10;
+    }
+    /* From 6s hint: count 10..0 over the next 10 seconds. */
+    int rem = 10 - (int)((held - TOUCH_RECONFIG_HINT_MS) / 1000UL);
+    if (rem < 0) {
+        rem = 0;
+    }
+    if (rem > 10) {
+        rem = 10;
+    }
+    return rem;
+}
+
+static void on_reconfig_hint(void) {
+    reconfig_hint_visible = true;
+    ui_clock_show_reconfig_hint(true);
+    ui_clock_set_reconfig_countdown(reconfig_remaining_sec());
+}
+
+static void hide_reconfig_hint_if_needed(void) {
+    if (reconfig_hint_visible && !touch_button_is_pressed()) {
+        reconfig_hint_visible = false;
+        ui_clock_show_reconfig_hint(false);
+    }
+}
+
+static void update_reconfig_countdown(void) {
+    if (!reconfig_hint_visible || !touch_button_is_pressed()) {
+        return;
+    }
+    ui_clock_set_reconfig_countdown(reconfig_remaining_sec());
+}
+
+/** Clear saved WiFi and reboot into SoftAP portal. */
+static void on_reconfig_wifi(void) {
+    reconfig_hint_visible = false;
+    ui_clock_show_reconfig_hint(false);
+    /* Classic Network boot page (not blackout) — covers main UI, then reboot. */
+    ui_clock_set_theme(THEME_DARK);
+    boot_page(BOOT_PAGE_WIFI,
+              "Open config portal\nSSID: " WIFI_AP_NAME "\nConnect phone WiFi",
+              400);
+    wifi_setup_reset();
+    pump_display(100);
+    ESP.restart();
+}
+
 void setup() {
     DBG_BEGIN(115200);
     delay(200);
@@ -80,10 +139,18 @@ void setup() {
     config_store_begin();
     ui_clock_set_theme(config_store_get().theme);
 
-    boot_page(BOOT_PAGE_START, "Weather Clock\nStarting system...", 500);
-    DBG_PRINTLN("System Ready");
+    /* No saved WiFi (first boot / after reset): dark Network portal UI. */
+    if (!config_store_is_valid()) {
+        ui_clock_set_theme(THEME_DARK);
+        boot_page(BOOT_PAGE_WIFI,
+                  "Open config portal\nSSID: " WIFI_AP_NAME "\nConnect phone WiFi",
+                  300);
+    } else {
+        boot_page(BOOT_PAGE_START, "Weather Clock\nStarting system...", 500);
+        DBG_PRINTLN("System Ready");
+        boot_page(BOOT_PAGE_WIFI, "Preparing WiFi...", 350);
+    }
 
-    boot_page(BOOT_PAGE_WIFI, "Preparing WiFi...", 350);
     if (!wifi_setup_begin(boot_status_live)) {
         boot_page(BOOT_PAGE_WIFI, "WiFi setup failed\nReset to retry", 0);
         return;
@@ -122,10 +189,18 @@ void loop() {
     lvgl_driver_handler();
 
     TouchEvent ev = touch_button_poll();
-    if (ev == TOUCH_EVENT_THEME) {
-        on_theme_long_press();
-    } else if (ev == TOUCH_EVENT_FACE) {
-        on_face_long_press();
+    if (ui_ready) {
+        if (ev == TOUCH_EVENT_THEME) {
+            on_theme_long_press();
+        } else if (ev == TOUCH_EVENT_FACE) {
+            on_face_long_press();
+        } else if (ev == TOUCH_EVENT_RECONFIG_HINT) {
+            on_reconfig_hint();
+        } else if (ev == TOUCH_EVENT_RECONFIG) {
+            on_reconfig_wifi();
+        }
+        update_reconfig_countdown();
+        hide_reconfig_hint_if_needed();
     }
 
     uint32_t now = millis();
@@ -142,3 +217,4 @@ void loop() {
 
     delay(5);
 }
+
