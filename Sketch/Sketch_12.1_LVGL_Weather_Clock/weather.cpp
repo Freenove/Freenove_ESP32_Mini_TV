@@ -319,19 +319,50 @@ static bool fetch_current_weather(float lat, float lon,
     json_find_number(body, "cloud_cover", &cloud, current_idx);
 
     int wmo = (int)(code + 0.5);
-    /*
-     * Open-Meteo sometimes reports light drizzle (51/53/55) with near-zero rain
-     * and low cloud cover while it looks clear outside. Prefer clearer label.
-     */
-    if ((wmo == 51 || wmo == 53 || wmo == 55 || wmo == 56 || wmo == 57) &&
-        precip < 0.2 && cloud <= 40.0) {
-        DBG_PRINTF("[WX] drizzle code=%d but precip=%.2f cloud=%.0f%% -> Clear\n",
-                   wmo, precip, cloud);
-        wmo = (cloud <= 20.0) ? 0 : 1;
-    } else if ((wmo == 95 || wmo == 96 || wmo == 99) &&
-               precip < 0.5 && cloud <= 60.0) {
-        int softened = (cloud <= 25.0) ? 1 : ((cloud <= 50.0) ? 2 : 3);
-        DBG_PRINTF("[WX] thunder code=%d but precip=%.2f cloud=%.0f%% -> %d\n",
+
+    if (wmo == 95 || wmo == 96 || wmo == 99) {
+        int softened;
+        if (precip < 0.15) {
+            /* Near-zero rain: never keep Thunderstorm. */
+            if (cloud <= 20.0) {
+                softened = 0;      /* Clear */
+            } else if (cloud <= 45.0) {
+                softened = 1;      /* Mainly Clear */
+            } else if (cloud <= 75.0) {
+                softened = 2;      /* Partly Cloudy */
+            } else {
+                softened = 3;      /* Overcast */
+            }
+            DBG_PRINTF("[WX] thunder code=%d precip=%.2f cloud=%.0f%% -> %d (dry)\n",
+                       wmo, precip, cloud, softened);
+            wmo = softened;
+        } else if (precip < 0.8 && cloud <= 80.0) {
+            if (cloud <= 25.0) {
+                softened = 1;
+            } else if (cloud <= 55.0) {
+                softened = 2;
+            } else {
+                softened = 3;
+            }
+            DBG_PRINTF("[WX] thunder code=%d precip=%.2f cloud=%.0f%% -> %d\n",
+                       wmo, precip, cloud, softened);
+            wmo = softened;
+        }
+    } else if ((wmo == 51 || wmo == 53 || wmo == 55 || wmo == 56 || wmo == 57) &&
+               precip < 0.25 && cloud <= 50.0) {
+        int softened = (cloud <= 20.0) ? 0 : ((cloud <= 40.0) ? 1 : 2);
+        DBG_PRINTF("[WX] drizzle code=%d precip=%.2f cloud=%.0f%% -> %d\n",
+                   wmo, precip, cloud, softened);
+        wmo = softened;
+    } else if ((wmo >= 80 && wmo <= 82) && precip < 0.25 && cloud <= 50.0) {
+        int softened = (cloud <= 20.0) ? 0 : ((cloud <= 40.0) ? 1 : 2);
+        DBG_PRINTF("[WX] shower code=%d precip=%.2f cloud=%.0f%% -> %d\n",
+                   wmo, precip, cloud, softened);
+        wmo = softened;
+    } else if ((wmo == 61 || wmo == 63 || wmo == 65) &&
+               precip < 0.15 && cloud <= 40.0) {
+        int softened = (cloud <= 20.0) ? 0 : 1;
+        DBG_PRINTF("[WX] rain code=%d precip=%.2f cloud=%.0f%% -> %d\n",
                    wmo, precip, cloud, softened);
         wmo = softened;
     }

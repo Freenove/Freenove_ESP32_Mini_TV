@@ -22,7 +22,11 @@
 /** Progress callback for Serial / UI */
 typedef void (*WifiStatusCallback)(const char *text);
 
-bool wifi_setup_begin(WifiStatusCallback on_status = nullptr);
+/** Called often while connecting / while SoftAP portal is open (LVGL + touch). */
+typedef void (*WifiIdleCallback)(void);
+
+bool wifi_setup_begin(WifiStatusCallback on_status = nullptr,
+                      WifiIdleCallback on_idle = nullptr);
 
 /** Clear EEPROM and WiFiManager saved credentials. */
 void wifi_setup_reset(void);

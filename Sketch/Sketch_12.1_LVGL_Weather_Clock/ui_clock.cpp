@@ -14,7 +14,7 @@
 #include <string.h>
 #include <time.h>
 
-/* shows fixed 00:00 on weather face. **/
+/* Debug **/
 #ifndef UI_CLOCK_FORCE_0000
 #define UI_CLOCK_FORCE_0000 0
 #endif
@@ -355,10 +355,9 @@ static void ensure_boot_widgets(void) {
     lv_obj_clear_flag(boot_bg, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(boot_bg, LV_OBJ_FLAG_HIDDEN);
 
-    /* Step indicator dots. */
     const int dot_n = (int)BOOT_PAGE_COUNT;
-    const int dot_sz = 8;
-    const int gap = 10;
+    const int dot_sz = 7;
+    const int gap = 8;
     const int total_w = dot_n * dot_sz + (dot_n - 1) * gap;
     const int start_x = (240 - total_w) / 2;
     for (int i = 0; i < dot_n; ++i) {
@@ -369,7 +368,7 @@ static void ensure_boot_widgets(void) {
         lv_obj_set_style_pad_all(dot, 0, 0);
         lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
-        lv_obj_set_pos(dot, start_x + i * (dot_sz + gap), 18);
+        lv_obj_set_pos(dot, start_x + i * (dot_sz + gap), 20);
         boot_step_dots[i] = dot;
     }
 
@@ -383,30 +382,33 @@ static void ensure_boot_widgets(void) {
     lv_obj_set_style_text_align(boot_subtitle, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_width(boot_subtitle, 220);
     lv_label_set_text(boot_subtitle, "Initializing");
-    lv_obj_align(boot_subtitle, LV_ALIGN_TOP_MID, 0, 66);
+    lv_obj_align(boot_subtitle, LV_ALIGN_TOP_MID, 0, 64);
 
     boot_bar = lv_bar_create(scr);
-    lv_obj_set_size(boot_bar, 160, 8);
-    lv_obj_align(boot_bar, LV_ALIGN_TOP_MID, 0, 96);
+    lv_obj_set_size(boot_bar, 160, 6);
+    lv_obj_align(boot_bar, LV_ALIGN_TOP_MID, 0, 90);
     lv_bar_set_range(boot_bar, 0, 100);
     lv_bar_set_value(boot_bar, 0, LV_ANIM_OFF);
     lv_obj_set_style_bg_color(boot_bar, lv_color_hex(pal()->bar_track), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(boot_bar, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_radius(boot_bar, 4, LV_PART_MAIN);
+    lv_obj_set_style_radius(boot_bar, 3, LV_PART_MAIN);
     lv_obj_set_style_bg_color(boot_bar, lv_color_hex(pal()->hour), LV_PART_INDICATOR);
     lv_obj_set_style_bg_opa(boot_bar, LV_OPA_COVER, LV_PART_INDICATOR);
-    lv_obj_set_style_radius(boot_bar, 4, LV_PART_INDICATOR);
+    lv_obj_set_style_radius(boot_bar, 3, LV_PART_INDICATOR);
 
-    boot_label = make_label(scr, font_md, pal()->text);
+    boot_label = make_label(scr, font_sm, pal()->text);
     lv_obj_set_style_text_align(boot_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_width(boot_label, 220);
+    lv_obj_set_height(boot_label, 92);
     lv_label_set_long_mode(boot_label, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_line_space(boot_label, 6, 0);
+    lv_obj_align(boot_label, LV_ALIGN_TOP_MID, 0, 110);
 
     boot_hint = make_label(scr, font_sm, pal()->hint);
     lv_obj_set_style_text_align(boot_hint, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_width(boot_hint, 220);
     lv_label_set_text(boot_hint, "Please wait...");
-    lv_obj_align(boot_hint, LV_ALIGN_BOTTOM_MID, 0, -28);
+    lv_obj_align(boot_hint, LV_ALIGN_BOTTOM_MID, 0, -18);
 }
 
 static void boot_raise_chrome(void) {
@@ -753,7 +755,9 @@ static void refresh_boot_theme_colors(void) {
     lv_obj_set_style_text_color(boot_title, lv_color_hex(p->hour), 0);
     lv_obj_set_style_text_color(boot_subtitle, lv_color_hex(p->min), 0);
     lv_obj_set_style_text_color(boot_label, lv_color_hex(p->text), 0);
-    lv_obj_set_style_text_color(boot_hint, lv_color_hex(p->hint), 0);
+    if (boot_hint) {
+        lv_obj_set_style_text_color(boot_hint, lv_color_hex(p->hint), 0);
+    }
     if (boot_bar) {
         lv_obj_set_style_bg_color(boot_bar, lv_color_hex(p->bar_track), LV_PART_MAIN);
         lv_obj_set_style_bg_color(boot_bar, lv_color_hex(p->hour), LV_PART_INDICATOR);
@@ -966,7 +970,7 @@ uint8_t ui_clock_toggle_face(void) {
 }
 
 static void boot_label_slide_exec(void *obj, int32_t v) {
-    lv_obj_align((lv_obj_t *)obj, LV_ALIGN_CENTER, (int32_t)v, 18);
+    lv_obj_align((lv_obj_t *)obj, LV_ALIGN_TOP_MID, (int32_t)v, 110);
 }
 
 void ui_clock_show_boot_page(BootPage page, const char *detail) {
@@ -985,15 +989,19 @@ void ui_clock_show_boot_page(BootPage page, const char *detail) {
     lv_label_set_text(boot_title, boot_page_title(page));
     lv_label_set_text(boot_subtitle, boot_page_subtitle(page));
     lv_label_set_text(boot_label, detail ? detail : "");
-    lv_obj_align(boot_label, LV_ALIGN_CENTER, 0, 18);
+    lv_obj_set_style_text_font(boot_label, font_sm, 0);
+    lv_obj_set_width(boot_label, 220);
+    lv_obj_set_height(boot_label, 92);
+    lv_obj_set_style_text_line_space(boot_label, 6, 0);
+    lv_obj_align(boot_label, LV_ALIGN_TOP_MID, 0, 110);
 
-    lv_bar_set_value(boot_bar, boot_page_progress(page), LV_ANIM_ON);
+    lv_bar_set_value(boot_bar, boot_page_progress(page), LV_ANIM_OFF);
 
     lv_anim_t slide;
     lv_anim_init(&slide);
     lv_anim_set_var(&slide, boot_label);
-    lv_anim_set_values(&slide, 36, 0);
-    lv_anim_set_duration(&slide, 220);
+    lv_anim_set_values(&slide, 24, 0);
+    lv_anim_set_duration(&slide, 180);
     lv_anim_set_path_cb(&slide, lv_anim_path_ease_out);
     lv_anim_set_exec_cb(&slide, boot_label_slide_exec);
     lv_anim_start(&slide);
@@ -1014,7 +1022,11 @@ void ui_clock_show_boot(const char *text) {
         set_boot_visible(true);
     }
     lv_label_set_text(boot_label, text ? text : "");
-    lv_obj_align(boot_label, LV_ALIGN_CENTER, 0, 18);
+    lv_obj_set_style_text_font(boot_label, font_sm, 0);
+    lv_obj_set_width(boot_label, 220);
+    lv_obj_set_height(boot_label, 92);
+    lv_obj_set_style_text_line_space(boot_label, 6, 0);
+    lv_obj_align(boot_label, LV_ALIGN_TOP_MID, 0, 110);
     boot_raise_chrome();
     lv_timer_handler();
     lv_timer_handler();
@@ -1271,8 +1283,14 @@ void ui_clock_update_weather(const WeatherInfo &w) {
     lv_bar_set_value(temp_bar, temp_pct, LV_ANIM_OFF);
     lv_bar_set_value(hum_bar, constrain(w.humidity_pct, 0, 100), LV_ANIM_OFF);
 
+    const AppConfig &cfg = config_store_get();
     char buf[16];
-    snprintf(buf, sizeof(buf), "%.0fC", w.temperature_c);
+    if (cfg.temp_unit == TEMP_UNIT_F) {
+        float f = w.temperature_c * 9.0f / 5.0f + 32.0f;
+        snprintf(buf, sizeof(buf), "%.0fF", f);
+    } else {
+        snprintf(buf, sizeof(buf), "%.0fC", w.temperature_c);
+    }
     lv_label_set_text(temp_value, buf);
     snprintf(buf, sizeof(buf), "%d%%", w.humidity_pct);
     lv_label_set_text(hum_value, buf);

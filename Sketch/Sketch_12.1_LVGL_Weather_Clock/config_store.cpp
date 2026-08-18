@@ -21,6 +21,9 @@ static void clamp_display_format(AppConfig &cfg) {
     if (cfg.month_en != MONTH_ENG) {
         cfg.month_en = MONTH_NUM;
     }
+    if (cfg.temp_unit != TEMP_UNIT_F) {
+        cfg.temp_unit = TEMP_UNIT_C;
+    }
     if (cfg.ui_face > UI_FACE_XL) {
         cfg.ui_face = UI_FACE_WEATHER;
     }
@@ -34,6 +37,7 @@ static void config_set_defaults(AppConfig &cfg) {
     cfg.hour12 = HOUR_FMT_24;
     cfg.date_order = DATE_ORDER_DMY;
     cfg.month_en = MONTH_NUM;
+    cfg.temp_unit = TEMP_UNIT_C;
     cfg.ui_face = UI_FACE_WEATHER;
 }
 
@@ -83,14 +87,15 @@ void config_store_begin(void) {
     clamp_display_format(g_cfg);
 
     DBG_PRINTF("[CFG] Loaded SSID=\"%s\" TZ=\"%s\" City=\"%s\" Theme=%s "
-                  "Face=%s Clock=%s Date=%u Month=%s",
+                  "Face=%s Clock=%s Date=%u Month=%s Temp=%s",
                   g_cfg.ssid, g_cfg.timezone, g_cfg.city[0] ? g_cfg.city : "(auto)",
                   g_cfg.theme == THEME_LIGHT ? "light" : "dark",
                   g_cfg.ui_face == UI_FACE_ANALOG ? "analog" :
                   (g_cfg.ui_face == UI_FACE_XL ? "xl" : "weather"),
                   g_cfg.hour12 == HOUR_FMT_12 ? "12h" : "24h",
                   (unsigned)g_cfg.date_order,
-                  g_cfg.month_en == MONTH_ENG ? "Eng" : "Num");
+                  g_cfg.month_en == MONTH_ENG ? "Eng" : "Num",
+                  g_cfg.temp_unit == TEMP_UNIT_F ? "F" : "C");
     if (g_cfg.has_coords) {
         DBG_PRINTF(" @ %.4f,%.4f", g_cfg.latitude, g_cfg.longitude);
     }
@@ -123,6 +128,7 @@ bool config_store_save(const char *ssid, const char *password,
     uint8_t hour12_keep = g_cfg.hour12;
     uint8_t date_order_keep = g_cfg.date_order;
     uint8_t month_en_keep = g_cfg.month_en;
+    uint8_t temp_unit_keep = g_cfg.temp_unit;
     uint8_t ui_face_keep = g_cfg.ui_face;
     strncpy(city_keep, g_cfg.city, CONFIG_CITY_LEN - 1);
     city_keep[CONFIG_CITY_LEN - 1] = '\0';
@@ -153,6 +159,7 @@ bool config_store_save(const char *ssid, const char *password,
     g_cfg.hour12 = hour12_keep;
     g_cfg.date_order = date_order_keep;
     g_cfg.month_en = month_en_keep;
+    g_cfg.temp_unit = temp_unit_keep;
     g_cfg.ui_face = ui_face_keep;
     clamp_display_format(g_cfg);
 
@@ -219,10 +226,12 @@ bool config_store_save_theme(uint8_t theme) {
     return ok;
 }
 
-bool config_store_save_display_format(uint8_t hour12, uint8_t date_order, uint8_t month_en) {
+bool config_store_save_display_format(uint8_t hour12, uint8_t date_order,
+                                      uint8_t month_en, uint8_t temp_unit) {
     g_cfg.hour12 = hour12;
     g_cfg.date_order = date_order;
     g_cfg.month_en = month_en;
+    g_cfg.temp_unit = temp_unit;
     clamp_display_format(g_cfg);
     if (g_cfg.magic != CONFIG_MAGIC) {
         g_cfg.magic = CONFIG_MAGIC;
@@ -230,10 +239,11 @@ bool config_store_save_display_format(uint8_t hour12, uint8_t date_order, uint8_
 
     EEPROM.put(0, g_cfg);
     bool ok = EEPROM.commit();
-    DBG_PRINTF("[CFG] Display format: clock=%s date_order=%u month=%s (%s)\n",
+    DBG_PRINTF("[CFG] Display format: clock=%s date_order=%u month=%s temp=%s (%s)\n",
                   g_cfg.hour12 == HOUR_FMT_12 ? "12h" : "24h",
                   (unsigned)g_cfg.date_order,
                   g_cfg.month_en == MONTH_ENG ? "Eng" : "Num",
+                  g_cfg.temp_unit == TEMP_UNIT_F ? "F" : "C",
                   ok ? "OK" : "FAIL");
     return ok;
 }

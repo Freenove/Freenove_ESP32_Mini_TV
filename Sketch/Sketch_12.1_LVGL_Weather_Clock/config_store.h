@@ -3,7 +3,7 @@
 
 #include <Arduino.h>
 
-#define CONFIG_MAGIC       0xA5C0FF05UL
+#define CONFIG_MAGIC       0xA5C0FF06UL
 #define CONFIG_SSID_LEN    33
 #define CONFIG_PASS_LEN    65
 #define CONFIG_TZ_LEN      40
@@ -31,6 +31,10 @@
 #define MONTH_NUM  0  /* 01..12 */
 #define MONTH_ENG  1  /* Jan..Dec */
 
+/* Temperature unit. */
+#define TEMP_UNIT_C  0  /* Celsius */
+#define TEMP_UNIT_F  1  /* Fahrenheit */
+
 struct AppConfig {
     uint32_t magic;
     char ssid[CONFIG_SSID_LEN];
@@ -45,6 +49,7 @@ struct AppConfig {
     uint8_t date_order;
     uint8_t month_en;
     uint8_t ui_face;
+    uint8_t temp_unit;
 };
 
 void config_store_begin(void);
@@ -56,7 +61,7 @@ bool config_store_save_timezone(const char *timezone);
 bool config_store_save_location(const char *city, float latitude, float longitude);
 bool config_store_has_coords(void);
 bool config_store_save_theme(uint8_t theme);
-bool config_store_save_display_format(uint8_t hour12, uint8_t date_order, uint8_t month_en);
+bool config_store_save_display_format(uint8_t hour12, uint8_t date_order, uint8_t month_en, uint8_t temp_unit);
 bool config_store_save_ui_face(uint8_t ui_face);
 void config_store_clear(void);
 

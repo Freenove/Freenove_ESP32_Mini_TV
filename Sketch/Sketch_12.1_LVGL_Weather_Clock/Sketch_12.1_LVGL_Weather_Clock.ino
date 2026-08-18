@@ -21,9 +21,44 @@ static uint32_t last_time_ms = 0;
 static uint32_t last_weather_ms = 0;
 static bool ui_ready = false;
 static bool reconfig_hint_visible = false;
+static bool reconfig_in_progress = false;
 
 static void boot_status_live(const char *text) {
     ui_clock_show_boot(text);
+}
+
+static void on_theme_long_press(void);
+static void on_face_long_press(void);
+static void on_reconfig_hint(void);
+static void on_reconfig_wifi(void);
+static void update_reconfig_countdown(void);
+static void hide_reconfig_hint_if_needed(void);
+
+static void process_touch_events(void) {
+    if (reconfig_in_progress) {
+        return;
+    }
+
+    TouchEvent ev = touch_button_poll();
+    if (ev == TOUCH_EVENT_RECONFIG_HINT) {
+        on_reconfig_hint();
+    } else if (ev == TOUCH_EVENT_RECONFIG) {
+        on_reconfig_wifi();
+    } else if (ui_ready) {
+        if (ev == TOUCH_EVENT_THEME) {
+            on_theme_long_press();
+        } else if (ev == TOUCH_EVENT_FACE) {
+            on_face_long_press();
+        }
+    }
+    update_reconfig_countdown();
+    hide_reconfig_hint_if_needed();
+}
+
+static void wifi_idle_pump(void) {
+    lvgl_driver_handler();
+    process_touch_events();
+    delay(5);
 }
 
 /** Show a boot page **/
@@ -31,8 +66,10 @@ static void boot_page(BootPage page, const char *detail, uint32_t hold_ms = 450)
     ui_clock_show_boot_page(page, detail);
     uint32_t start = millis();
     while (millis() - start < hold_ms) {
-        lvgl_driver_handler();
-        delay(5);
+        if (reconfig_in_progress) {
+            return;
+        }
+        wifi_idle_pump();
     }
 }
 
@@ -85,7 +122,7 @@ static int reconfig_remaining_sec(void) {
     if (held < TOUCH_RECONFIG_HINT_MS) {
         return 10;
     }
-    /* From 6s hint: count 10..0 over the next 10 seconds. */
+
     int rem = 10 - (int)((held - TOUCH_RECONFIG_HINT_MS) / 1000UL);
     if (rem < 0) {
         rem = 0;
@@ -118,15 +155,16 @@ static void update_reconfig_countdown(void) {
 
 /** Clear saved WiFi and reboot into SoftAP portal. */
 static void on_reconfig_wifi(void) {
+    if (reconfig_in_progress) {
+        return;
+    }
+    reconfig_in_progress = true;
     reconfig_hint_visible = false;
-    ui_clock_show_reconfig_hint(false);
-    /* Classic Network boot page (not blackout) — covers main UI, then reboot. */
-    ui_clock_set_theme(THEME_DARK);
-    boot_page(BOOT_PAGE_WIFI,
-              "Open config portal\nSSID: " WIFI_AP_NAME "\nConnect phone WiFi",
-              400);
+
+    ui_clock_show_blackout("Restarting...");
+    pump_display(80);
     wifi_setup_reset();
-    pump_display(100);
+    pump_display(80);
     ESP.restart();
 }
 
@@ -139,11 +177,11 @@ void setup() {
     config_store_begin();
     ui_clock_set_theme(config_store_get().theme);
 
-    /* No saved WiFi (first boot / after reset): dark Network portal UI. */
     if (!config_store_is_valid()) {
         ui_clock_set_theme(THEME_DARK);
         boot_page(BOOT_PAGE_WIFI,
-                  "Open config portal\nSSID: " WIFI_AP_NAME "\nConnect phone WiFi",
+                  "Use your phone to join\nthe following Wi-Fi:\n"
+                  "Name: " WIFI_AP_NAME "\nNo password",
                   300);
     } else {
         boot_page(BOOT_PAGE_START, "Weather Clock\nStarting system...", 500);
@@ -151,7 +189,7 @@ void setup() {
         boot_page(BOOT_PAGE_WIFI, "Preparing WiFi...", 350);
     }
 
-    if (!wifi_setup_begin(boot_status_live)) {
+    if (!wifi_setup_begin(boot_status_live, wifi_idle_pump)) {
         boot_page(BOOT_PAGE_WIFI, "WiFi setup failed\nReset to retry", 0);
         return;
     }
@@ -168,10 +206,17 @@ void setup() {
     refresh_weather();
     if (weather_get().valid) {
         const WeatherInfo &w = weather_get();
+        const AppConfig &cfg = config_store_get();
         char msg[96];
-        snprintf(msg, sizeof(msg), "Got weather\n%s  %.0fC",
-                 w.resolved_name[0] ? w.resolved_name : "OK",
-                 w.temperature_c);
+        if (cfg.temp_unit == TEMP_UNIT_F) {
+            float f = w.temperature_c * 9.0f / 5.0f + 32.0f;
+            snprintf(msg, sizeof(msg), "Got weather\n%s  %.0fF",
+                     w.resolved_name[0] ? w.resolved_name : "OK", f);
+        } else {
+            snprintf(msg, sizeof(msg), "Got weather\n%s  %.0fC",
+                     w.resolved_name[0] ? w.resolved_name : "OK",
+                     w.temperature_c);
+        }
         boot_page(BOOT_PAGE_WEATHER, msg, 500);
     }
 
@@ -187,21 +232,7 @@ void setup() {
 
 void loop() {
     lvgl_driver_handler();
-
-    TouchEvent ev = touch_button_poll();
-    if (ui_ready) {
-        if (ev == TOUCH_EVENT_THEME) {
-            on_theme_long_press();
-        } else if (ev == TOUCH_EVENT_FACE) {
-            on_face_long_press();
-        } else if (ev == TOUCH_EVENT_RECONFIG_HINT) {
-            on_reconfig_hint();
-        } else if (ev == TOUCH_EVENT_RECONFIG) {
-            on_reconfig_wifi();
-        }
-        update_reconfig_countdown();
-        hide_reconfig_hint_if_needed();
-    }
+    process_touch_events();
 
     uint32_t now = millis();
 
@@ -217,4 +248,3 @@ void loop() {
 
     delay(5);
 }
-
